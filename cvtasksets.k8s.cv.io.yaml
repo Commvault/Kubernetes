@@ -1,3 +1,4 @@
+---
 apiVersion: apiextensions.k8s.io/v1
 kind: CustomResourceDefinition
 metadata:
@@ -30,14 +31,14 @@ spec:
           spec:
             properties:
               #application or namespace name on which the tasks should be run.
-              appname:
+              appName:
                 type: string
               #namespace name of the application on which the tasks should be run.
-              appnamespace:
+              appNamespace:
                 type: string
               #optional label selectors. This is for running tasks on all the applications where the label is set.
               #This is the list of list of label selectors. All strings of the inner list are matched. Any list of outer list is matched.
-              labelselectors:
+              labelSelectors: 
                 type: array
                 items:
                   type: array
@@ -50,33 +51,35 @@ spec:
                     id:
                       type: string
                     #name of the created CvTask Customer resource.
-                    cvtaskname:
+                    cvTaskName:
                       type: string
                     #namespace where to find the above cvtask. optional: default searched in cv-config.
-                    cvtaskns:
+                    cvTaskNamespace:
                       type: string
                     #optional pod name under which the task should be run. If not specified, task will be run on all pods of the application.
-                    podname:
+                    podName:
                       type: string
                     #optional container name.
-                    containername:
+                    containerName: 
                       type: string
                     #optional level at which it needs to run (for future). Currently only supports application.
-                    execlevel:
+                    executionLevel: 
                       type: string
-                      enum:
-                      - application
-                      - namespace
-                      - cluster
+                      enum: 
+                      - Application
+                      - Namespace
+                      - Cluster
+                      default: Application
                     #optional execution sequence field: helpful in case where there are multiple tasks selected and we want them to be executed in sequence.
-                    executionorder:
+                    executionOrder:
                       type: integer
                     #option to disabled in case we just want to disable execution this for the application (but may need to re-enable later).
-                    isdisabled:
+                    isDisabled:
                       type: boolean
+                      default: false
                   type: object
-                  required:
-                  - cvtaskname
+                  required: 
+                  - cvTaskName
                 type: array
             type: object
             required:
