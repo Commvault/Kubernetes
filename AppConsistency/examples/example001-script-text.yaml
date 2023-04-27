@@ -1,0 +1,47 @@
+# This example copies text in preBackupSnapshot.command to file /tmp/prehook and text postBackupSnapshot.command to /tmp/posthook
+# /tmp/prehook is executed in container app-server in pod custom-app in namespace prod-db before snapshot is taken and return value saved in /tmp/pre.rc
+# /tmp/posthook is executed in container app-server in pod custom-app in namespace prod-db after snapshot is taken and return value saved in /tmp/post.rc
+
+apiVersion: k8s.cv.io/v1
+kind: CvTask
+metadata:
+  name: cvtask002-scripttext
+spec:
+  preBackupSnapshot:
+    cmdType: ScriptText
+    command: |
+      #!/bin/bash
+      logfile=$1
+      echo $(date) >> $logfile
+      echo "Start pre-script execution" >> $logfile
+      echo "Application quiesced successfully" >> $logfile
+      echo "pre-script got called at ------- $(date) -------" >> $logfile
+      exit 0
+    args: [ "/tmp/app-consistency.log"]
+  postBackupSnapshot:
+    cmdType: ScriptText
+    command: |
+      #!/bin/bash
+      logfile='/tmp/app-consistency.log'
+      echo $(date) >> $logfile
+      echo "Start post-script execution" >> $logfile
+      echo "Application is un-quiesced successfully" >> $logfile
+      echo "post-freeze got called at ------- $(date) -------" >> $logfile
+      exit 0
+    args: [ "/tmp/app-consistency.log"]
+---
+apiVersion: k8s.cv.io/v1
+kind: CvTaskSet
+metadata:
+  name: cvtaskset001
+  namespace: cv-config
+spec:
+  appName: app-db
+  appNamespace: prod-db
+  tasks:
+  - id: testid0001
+    cvTaskName: cvtask002-scripttext
+    cvTaskNamespace: cv-config
+    containerName: app-server
+    podName: custom-app
+    isDisabled: false

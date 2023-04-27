@@ -1,12 +1,35 @@
+# This example executes below command inside application 'mysql-db' on container 'mysql-server' in namespace 'mysql-prod'
+#"/root/scripts/mysqldb-actions quiesce" before taking snapshots
+#"/root/scripts/mysqldb-actions unquiesce" after taking snapshots
 apiVersion: k8s.cv.io/v1
 kind: CvTask
 metadata:
-  name: task003-local-script
+  name: cvtask003-local
+  namespace: cv-config
 spec:
-  preBackupSnapshot:
-    commandType: LocalScript
-    command: "/tmp/pre-localscript.sh"
   postBackupSnapshot:
+    args:
+    - unquiesce
+    command: /root/scripts/mysqldb-actions
     commandType: LocalScript
-    command: "/tmp/post-localscript.sh"
+  preBackupSnapshot:
+    args:
+    - quiesce
+    command: /root/scripts/mysqldb-actions
+    commandType: LocalScript
 ---
+apiVersion: k8s.cv.io/v1
+kind: CvTaskSet
+metadata:
+  name: cvtaskset001
+  namespace: cv-config
+spec:
+  appName: mysql-db
+  appNamespace: mysql-prod
+  tasks:
+  - id: testid0001
+    cvTaskName: cvtask003-local
+    cvTaskNamespace: cv-config
+    containerName: mysql-server
+    podName: mysql-pod
+    isDisabled: false

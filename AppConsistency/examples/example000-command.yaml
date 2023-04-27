@@ -1,3 +1,7 @@
+# This example executes below command inside application 'nginx-pod-1' on container 'web-server' in namespace 'nginx-prod'
+#"touch /tmp/pre-from-cvtask001-command" before taking snapshots
+#"touch /tmp/post-from-cvtask001-command" after taking snapshots
+
 apiVersion: k8s.cv.io/v1
 kind: CvTask
 metadata:
