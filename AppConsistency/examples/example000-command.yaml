@@ -1,0 +1,30 @@
+apiVersion: k8s.cv.io/v1
+kind: CvTask
+metadata:
+  name: cvtask001-command
+  namespace: cv-config
+spec:
+  preBackupSnapshot:
+    commandType: Command
+    command: "touch"
+    args: [ "/tmp/pre-from-cvtask001-command" ]
+  postBackupSnapshot:
+    commandType: Command
+    command: "touch"
+    args: [ "/tmp/post-from-cvtask001-command" ]
+---
+apiVersion: k8s.cv.io/v1
+kind: CvTaskSet
+metadata:
+  name: cvtaskset001
+  namespace: cv-config
+spec:
+  appName: nginx-pod-1
+  appNamespace: nginx-prod
+  tasks:
+  - id: testid0001
+    cvTaskName: cvtask001-command
+    cvTaskNamespace: cv-config
+    containerName: web-server
+    podName: nginx-pod-1
+    isDisabled: false

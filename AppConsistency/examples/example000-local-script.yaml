@@ -1,0 +1,12 @@
+apiVersion: k8s.cv.io/v1
+kind: CvTask
+metadata:
+  name: task003-local-script
+spec:
+  preBackupSnapshot:
+    commandType: LocalScript
+    command: "/tmp/pre-localscript.sh"
+  postBackupSnapshot:
+    commandType: LocalScript
+    command: "/tmp/post-localscript.sh"
+---
