@@ -1,0 +1,33 @@
+#
+# CvTask YAML Explained:
+#
+
+apiVersion: k8s.cv.io/v1
+kind: CvTask
+metadata:
+  name: cvtask001
+  namespace: cv-config
+spec:
+  preBackupSnapshot:
+    # Type of command, can Command, ScriptText or LocalScript
+    commandType: Command
+
+    #Command: A single command like ls,ps,touch,etc
+    #ScriptText: A multi-line bash,perl,python, etc script
+    #LocalScript: Path to script/file to be executed, must be available inside the pod
+    command: "touch"
+
+    #List of arguments to be passed to command
+    args: [ "/tmp/pre-from-cvtask001" ]
+
+  postBackupSnapshot:
+    # Type of command, can Command, ScriptText or LocalScript
+    commandType: Command
+
+    #Command: A single command like ls,ps,touch,etc
+    #ScriptText: A multi-line bash,perl,python, etc script
+    #LocalScript: Path to script/file to be executed, must be available inside the pod
+    command: "touch"
+
+    #List of arguments to be passed to command
+    args: [ "/tmp/post-from-cvtask001" ]

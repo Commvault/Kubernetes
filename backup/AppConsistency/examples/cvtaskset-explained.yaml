@@ -1,0 +1,49 @@
+#
+# CvTaskSet YAML Explained:
+#
+
+apiVersion: k8s.cv.io/v1
+kind: CvTaskSet
+metadata:
+  
+  #Name to uniquely identify a CvTaskSet
+  name: cvtaskset001
+  
+  namespace: cv-config
+spec:
+  
+  #Name of application on which the tasks should be run.
+  appName: my-app
+  
+  #Namespace of the application on which the tasks should be run.
+  appNamespace: my-namespace
+
+  #OPTIONAL : label selectors
+  #This is for running tasks on all the applications where the label is set.
+  #This is the list of list of label selectors.
+  labelSelectors: #Any of below to be matched
+  - [ "app=app1", "tier=tier1" ]  # All labels should be matched
+  - [ "app=app2", "tier=tier2" ]  # All labels should be matched
+
+  tasks:
+  # Optional Id, can be used for book keeping
+  - id: testid0001
+    
+    #Name of the created CvTask.  
+    cvTaskName: cvtask001
+    
+    #Namespace where to find the above cvtask. optional: default searched in cv-config.    
+    cvTaskNamespace: cv-tasks
+    
+    #optional :to disabled in case we just want to disable execution this for the application (but may need to re-enable later).
+    isDisabled: false
+    
+    #optional :container name on which the task should be executed.
+    containerName: my-cont
+
+    #optional :pod name on which the task should be executed.
+    podName: my-pod
+
+    #optional execution sequence field: helpful in case where there are multiple tasks selected and we want them to be executed in sequence.
+    # Executed in order, low to high
+    executionOrder: 1

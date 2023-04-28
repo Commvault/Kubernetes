@@ -1,7 +1,11 @@
-# This example executes below command inside application 'nginx-pod-1' on container 'web-server' in namespace 'nginx-prod'
-#"touch /tmp/pre-from-cvtask001-command" before taking snapshots
-#"touch /tmp/post-from-cvtask001-command" after taking snapshots
-
+#
+# This is sample CvTask and CvTaskSet YAML, which shows how to use commandType:Command
+#
+# This executes below commands inside application 'nginx-pod-1' on container 'web-server' in namespace 'nginx-prod'
+# "touch /tmp/pre-from-cvtask001-command" before taking snapshots
+# "touch /tmp/post-from-cvtask001-command" after taking snapshots
+# Return values of executed commands will be placed at /tmp/pre.rc and /tmp/post.rc
+#
 apiVersion: k8s.cv.io/v1
 kind: CvTask
 metadata:

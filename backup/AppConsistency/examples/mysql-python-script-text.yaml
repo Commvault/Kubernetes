@@ -1,8 +1,10 @@
+# This is sample CvTask and CvTaskSet YAML showing implemention of Application Consistency for MySQL
+#
 # This example copies text in preBackupSnapshot.command to file /tmp/prehook and text postBackupSnapshot.command to /tmp/posthook
 # /tmp/prehook is executed in container app-server in pod custom-app in namespace prod-db before snapshot is taken and return value saved in /tmp/pre.rc
 # /tmp/posthook is executed in container app-server in pod custom-app in namespace prod-db after snapshot is taken and return value saved in /tmp/post.rc
 # Respective logging can be seen in  /scripts/pre-freeze.log and /scripts/post-thaw.log inside application
-
+#
 apiVersion: k8s.cv.io/v1
 kind: CvTask
 metadata:

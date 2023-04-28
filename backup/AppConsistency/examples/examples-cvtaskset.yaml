@@ -1,0 +1,73 @@
+#
+# Below are sample CvTaskSet YAMLS
+#
+---
+#
+# Example01: cvtaskset001
+# task cvtask001 from namespace cv-tasks will be executed against all applications on namespace wordpress
+# matching labels [ app=wordpress-mysql and tier=mysql ]  OR [ app=wordpress and tier=frontend ] 
+#
+apiVersion: k8s.cv.io/v1
+kind: CvTaskSet
+metadata:
+  name: cvtaskset001
+  namespace: cv-config
+spec:
+  labelSelectors:
+  - [ "app=wordpress-mysql", "tier=mysql" ]
+  - [ "app=wordpress", "tier=frontend" ]
+  appNamespace: wordpress
+  tasks:
+  - id: testid0001
+    cvTaskName: cvtask001
+    cvTaskNamespace: cv-tasks
+    isDisabled: false
+---
+#
+# Example02: cvtaskset002
+# task cvtask002 from namespace cv-tasks will be executed against application named my-pod in namespace prepost
+#
+apiVersion: k8s.cv.io/v1
+kind: CvTaskSet
+metadata:
+  name: cvtaskset002
+  namespace: cv-config
+spec:
+  appName: my-pod
+  appNamespace: prepost
+  tasks:
+  - id: testid0002
+    cvTaskName: cvtask002
+    cvTaskNamespace: cv-tasks
+---
+#
+# Example03: cvtaskset003
+# Tasks cvtask004,cvtask003,cvtask005 will be executed in same order against application named my-pod in namespace prepost
+# Task task006 will not be executed as its disabled.
+# Tasks will be executed as per given executionOrder
+#
+apiVersion: k8s.cv.io/v1
+kind: CvTaskSet
+metadata:
+  name: cvtaskset003
+  namespace: cv-config
+spec:
+  appName: my-pod
+  appNamespace: prepost
+  tasks:
+  - cvTaskName: cvtask003
+    cvTaskNamespace: cv-tasks
+    executionOrder: 2
+    isDisabled: false
+  - cvTaskName: cvtask004
+    cvTaskNamespace: cv-tasks
+    executionOrder: 1
+    isDisabled: false
+  - cvTaskName: cvtask005
+    cvTaskNamespace: cv-tasks
+    executionOrder: 3
+    isDisabled: false
+  - cvTaskName: cvtask006
+    cvTaskNamespace: cv-tasks
+    executionOrder: 3
+    isDisabled: true
