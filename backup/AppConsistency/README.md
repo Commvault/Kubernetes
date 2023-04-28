@@ -1,10 +1,10 @@
-Application-Consistent Backups for Kubernetes Using CvTasks
+#Application-Consistent Backups for Kubernetes Using CvTasks
 
 To implement application-consistent backups for Kubernetes, you can execute tasks before and after taking volume snapshots.
 
 Contains set of YAMLs needed by Commvault Kubernetes Agent to take application-consistent backups.
 
-Install:
+Install Applicatin Consistency CRDs:
 kubectl apply -k deploy/
 
 Read more at.
