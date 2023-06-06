@@ -1,0 +1,20 @@
+# Delete "metadata.ownerReferences" from resources if the owner kind is "ServiceBinding"
+
+apiVersion: k8s.cv.io/v1
+kind: RestoreModifier
+metadata:
+  name: delete-ownerreferences-secret
+  namespace: cv-config
+spec:
+  selectors:
+  - field:
+      criteria: Contains
+      exact: true
+      path: /metadata/ownerReferences/0/kind
+      value: ServiceBinding
+    id: delete-ownerreferences-secret
+    kind: Secret
+  modifiers:
+  - action: Delete
+    path: /metadata/ownerReferences
+    selectorId: delete-ownerreferences-secret

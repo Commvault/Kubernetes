@@ -1,0 +1,21 @@
+# Change the image of Pods if it contains the image "nginx"
+
+apiVersion: k8s.cv.io/v1
+kind: RestoreModifier
+metadata:
+  name: change-pod-image
+  namespace: cv-config
+spec:
+  selectors:
+  - field:
+      criteria: Contains
+      exact: false
+      path: /spec/containers/0/image
+      value: nginx
+    id: change-pod-image
+    kind: Pod
+  modifiers:
+  - action: Add
+    path: /spec/containers/0/image
+    selectorId: change-pod-image
+    value: nginx:latest

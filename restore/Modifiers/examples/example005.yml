@@ -1,0 +1,21 @@
+# Change the image from all Deployments if the deployment contains specific labels and image contains a specific value
+
+apiVersion: k8s.cv.io/v1
+kind: RestoreModifier
+metadata:
+  name: change-image-labels
+  namespace: cv-config
+spec:
+  selectors:
+  - id: change-image-labels
+    kind: Deployment
+    labels:
+      deployment: prod
+      operation: modify
+  modifiers:
+  - action: Modify
+    newValue: cvregnew.commvault.com:9000
+    parameters: Exact
+    path: /spec/template/spec/containers/0/image
+    selectorId: change-image-labels
+    value: cvreg.commvault.com:8000

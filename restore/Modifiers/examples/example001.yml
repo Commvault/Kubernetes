@@ -1,0 +1,27 @@
+# Add initContainers to a Deployment with name "restoremodifier-deployment"
+
+apiVersion: k8s.cv.io/v1
+kind: RestoreModifier
+metadata:
+  name: add-init-containers
+  namespace: cv-config
+spec:
+  selectors:
+  - id: add-init-containers
+    kind: Deployment
+    name: restoremodifier-deployment
+  modifiers:
+  - selectorID: add-init-containers
+    action: Add
+    path: /spec/template/spec/initContainers    # Specify the key to set the value on
+    value:    # Value field takes all data types, include whole YAML paths as below
+    - name: install-newname
+      image: busybox
+      command:
+      - wget
+      - "-0"
+      - "/newdir/nginx.html"
+      - https://www.nginx.com/
+      volumeMounts:
+      - name: data
+        mountPath: "/newdir"

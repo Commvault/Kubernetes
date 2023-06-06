@@ -1,0 +1,19 @@
+# Modify the "spec.host" value of a Openshift Route with name "ocp-route"
+
+apiVersion: k8s.cv.io/v1
+kind: RestoreModifier
+metadata:
+  name: modify-route-hostname
+  namespace: cv-config
+spec:
+  selectors:
+  - id: modify-route-hostname
+    kind: Route
+    name: ocp-route
+  modifiers:
+  - action: Modify
+    newValue: ilocpde487.destination
+    parameters: Exact
+    path: /spec/host
+    selectorId: modify-route-hostname
+    value: ilocpbkp401.source

@@ -1,0 +1,17 @@
+# Add a label "modified-by: commvault" to all PVCs in namespace "mysql"
+
+apiVersion: k8s.cv.io/v1
+kind: RestoreModifier
+metadata:
+  name: add-modified-by-label
+  namespace: cv-config
+spec:
+  selectors:
+  - id: add-modified-by-label
+    kind: PersistentVolumeClaim
+    namespace: mysql
+  modifiers:
+  - action: Add
+    path: /metadata/labels/modified-by
+    selectorId: add-modified-by-label
+    value: commvault
