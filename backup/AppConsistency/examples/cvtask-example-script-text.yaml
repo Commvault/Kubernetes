@@ -12,7 +12,7 @@ metadata:
   name: cvtask002-scripttext
 spec:
   preBackupSnapshot:
-    CommandType: ScriptText
+    commandType: ScriptText
     command: |
       #!/bin/bash
       logfile=$1
@@ -23,7 +23,7 @@ spec:
       exit 0
     args: [ "/tmp/app-consistency.log"]
   postBackupSnapshot:
-    CommandType: ScriptText
+    commandType: ScriptText
     command: |
       #!/bin/bash
       logfile='/tmp/app-consistency.log'
