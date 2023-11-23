@@ -1,0 +1,10 @@
+The script CVK8SDiscoverDB.sh can be used to auto-detect the presence of mysql and postgresql databases inside the pods running on the kubernetes cluster.
+The script will create the CVTask and CVTaskSet custom resource yamls that can be used for application consistent backups.
+
+Syntax:
+
+CVK8SDiscoverDB.sh --db <database name> --namespace <namespace name>
+
+Example
+
+CVK8SDiscoverDB.sh --db mysql,postgres --namespace all

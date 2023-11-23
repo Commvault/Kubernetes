@@ -1,0 +1,14 @@
+apiVersion: k8s.cv.io/v1
+kind: CvTaskSet
+metadata:
+  name: cvtasksetname_placeholder
+  namespace: cv-config
+spec:
+  appName: my-pod_placeholder
+  appNamespace: prepost_placeholder
+  tasks:
+  - cvTaskName: cvtaskname_placeholder
+    cvTaskNamespace: cv-config
+    executionOrder: 2
+    isDisabled: false
+

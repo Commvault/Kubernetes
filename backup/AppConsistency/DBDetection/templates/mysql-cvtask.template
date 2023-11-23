@@ -1,0 +1,60 @@
+#
+# This is sample CvTask and CvTaskSet YAML, which shows how to use commandType:ScriptText
+#
+# This copies text in preBackupSnapshot.command to file /tmp/prehook and text postBackupSnapshot.command to /tmp/posthook
+# /tmp/prehook is executed in container app-server in pod custom-app in namespace prod-db before snapshot is taken and return value saved in /tmp/pre.rc
+# /tmp/posthook is executed in container app-server in pod custom-app in namespace prod-db after snapshot is taken and return value saved in /tmp/post.rc
+# Return values of executed scripts will be placed at /tmp/pre.rc and /tmp/post.rc
+#
+apiVersion: k8s.cv.io/v1
+kind: CvTask
+metadata:
+  name: cvtaskname_placeholder
+  namespace: cv-config
+spec:
+  preBackupSnapshot:
+    commandType: ScriptText
+    command: |
+      #!/bin/bash
+      MYSQL_USER="root"
+      MYSQL_PASSWORD="cvadmin"
+      logfile="/tmp/app-consistency.log"
+      echo `date +"%Y-%m-%d %H:%M:%S"` "Starting prescript execution..." >> $logfile
+      result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "SHOW SLAVE STATUS\G")
+      if [[ $result == *"Slave_IO_Running: Yes"* ]]; then
+         echo `date +"%Y-%m-%d %H:%M:%S"` "This is a slave mysql pod...will not quiesce it" >> $logfile
+      else
+         echo `date +"%Y-%m-%d %H:%M:%S"` "This is master or stanalone mysql pod...quiescing it" >> $logfile
+         result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "FLUSH TABLES WITH READ LOCK;")
+         if [[ $result == *"ERROR"* ]]; then
+            echo `date +"%Y-%m-%d %H:%M:%S"` "Error ! Unable to quiesce the mysql database" >> $logfile
+            echo `date +"%Y-%m-%d %H:%M:%S"` "Exiting" >> $logfile
+            exit 1
+         else
+            echo `date +"%Y-%m-%d %H:%M:%S"` "mysql database quiesced succesfully" >> $logfile
+            exit 0
+         fi
+      fi
+  postBackupSnapshot:
+    commandType: ScriptText
+    command: |
+      #!/bin/bash
+      MYSQL_USER=mysql_username
+      MYSQL_PASSWORD=mysql_password
+      logfile="/tmp/app-consistency.log"
+      echo `date +"%Y-%m-%d %H:%M:%S"` "Starting postscript execution..." >> $logfile
+      result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "SHOW SLAVE STATUS\G")
+      if [[ $result == *"Slave_IO_Running: Yes"* ]]; then
+        echo `date +"%Y-%m-%d %H:%M:%S"` "This is a slave mysql pod...will not unquiesce it as it was not quiesced" >> $logfile
+      else
+        echo "This mysql container is a master or standalone. uquiescing it.." >> $logfile
+        result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "unlock tables;")
+        if [[ $result == *"ERROR"* ]]; then
+          echo `date +"%Y-%m-%d %H:%M:%S"` "Error ! Unable to unquiesce the mysql database" >> $logfile
+          echo `date +"%Y-%m-%d %H:%M:%S"` "Please unquiesce it manually by running 'unlock tables'" >> $logfile
+          exit 1
+        else
+          echo `date +"%Y-%m-%d %H:%M:%S"` "mysql database unquiesced sucessfully." >> $logfile
+          exit 0
+        fi
+      fi
