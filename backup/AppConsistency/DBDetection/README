@@ -3,8 +3,8 @@ The script will create the CVTask and CVTaskSet custom resource yamls that can b
 
 Syntax:
 
-CVK8SDiscoverDB.sh --db <database name> --namespace <namespace name>
+CVK8SDiscoverDB.sh --namespace <namespace name> --db <database name>
 
 Example
 
-CVK8SDiscoverDB.sh --db mysql,postgres --namespace all
+CVK8SDiscoverDB.sh --namespace all --db mysql,postgres
