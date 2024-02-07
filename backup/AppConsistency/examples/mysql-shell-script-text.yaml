@@ -1,0 +1,240 @@
+# This is sample CvTask and CvTaskSet YAML showing implemention of Application Consistency for MySQL
+#
+# This example copies text in preBackupSnapshot.command to file /tmp/prehook and text postBackupSnapshot.command to /tmp/posthook
+# /tmp/prehook is executed in container app-server in pod custom-app in namespace prod-db before snapshot is taken and return value saved in /tmp/pre.rc
+# /tmp/posthook is executed in container app-server in pod custom-app in namespace prod-db after snapshot is taken and return value saved in /tmp/post.rc
+# Logging can be seen in /tmp/mysql-quiesce.log inside application
+#
+apiVersion: k8s.cv.io/v1
+kind: CvTask
+metadata:
+  name: example001-mysql-shell-script-text.yaml
+  namespace: cv-config
+spec:
+  preBackupSnapshot:
+    args: []
+    command: |
+      #!/usr/bin/bash
+      ##################################################################################################
+      #pre-script has 2 modes, launch and quiesce
+      #launch mode:
+      #  starts quiesce mode in background and waits for QUIESCESUCCESS or QUIESCEFAIL files to be created
+      #quiesce mode: in back ground
+      #  Try to quiesce DB, create QUIESCESUCCESS/QUIESCEFAIL/QUIESCETIMEDOUT accordingly
+      #  Wait for SNAPSHOTSUCCESS to be created by post-script, if found unquiesce DB and  create UNQUIESCESUCCESS
+      #  Else unquiesce DB and create SNAPSHOTFAIL
+      #  Unquiesce Database and kill process to be on safer side
+      ##################################################################################################
+      QUIESCESUCCESS="/tmp/db-quiesce-success"
+      QUIESCEFAIL="/tmp/db-quiesce-fail"
+      SNAPSHOTSUCCESS="/tmp/db-snapshot-success"
+      SNAPSHOTFAIL="/tmp/db-snapshot-fail"
+      UNQUIESCESUCCESS="/tmp/db-unquiesce-success"
+      QUIESCETIMEDOUT="/tmp/db-quiesce-timedout"
+      LOGFILE="/tmp/mysql-quiesce.log"
+      #Database credentials
+      MYSQLUSER="root"
+      MYSQLPASSWORD="changeme"
+      TIMEOUT=60
+      #Log file
+      log ()
+      {
+        msg=$*
+        ts=$(date +%Y-%m-%d:%H-%M-%S)
+        echo "$ts : $msg" >> $LOGFILE
+      }
+      
+      #2 modes, "launch" and "quiesce"
+      #default mode is "launch"
+      if [ "$#" -gt 0 ]
+      then
+      mode=$1
+      else
+      mode="launch"
+      fi
+      log "PRESCRIPT - INFO - Starting $mode "
+      #Launch mode
+      #Delete old/stale files
+      #Call pre script in quiesce mode in back ground and wait for QUIESCESUCCESS/QUIESCEFAIL
+      #exit
+      if [ "$mode" == "launch" ]
+      then
+        rm -f $QUIESCESUCCESS
+        rm -f $QUIESCEFAIL
+        rm -f $SNAPSHOTSUCCESS
+        rm -f $SNAPSHOTFAIL
+        rm -f $UNQUIESCESUCCESS
+        rm -f $QUIESCETIMEDOUT
+        log "PRESCRIPT - INFO - Calling pre-script in quiesce mode"
+        /tmp/prehook quiesce &
+        pid=$!
+        rc=$?
+        count=12
+        while [ $count -gt 0 ];
+        do
+          ls $QUIESCESUCCESS 2>/dev/null
+          rcqs=$?
+          ls $QUIESCEFAIL 2>/dev/null
+          rcqf=$?
+          if [ $rcqs == 0 ]
+          then
+            log "PRESCRIPT - SUCCESS - Found $QUIESCESUCCESS file, exiting file check"
+            break
+          elif [ $rcqf == 0 ]
+          then
+            log "PRESCRIPT - ERROR - Found  $QUIESCEFAIL file, exiting"
+            exit 1
+          fi
+          sleep 5
+          ((count-=1))
+        done
+        #Failed to find QUIESCESUCCESS in 1 min
+        if [ $count == 0 ]
+        then
+          log "PRESCRIPT - ERROR - File $QUIESCESUCCESS not found, exiting"
+          log "PRESCRIPT - INFO - Exiting $mode."
+          exit 1
+        else
+          log "PRESCRIPT - INFO - Exiting $mode."
+          exit 0
+        fi
+      fi
+      # Quiesce mode
+      # Quiesce DB, create QUIESCESUCCESS or QUIESCEFAIL
+      # Poll for 30 seconds for SNAPSHOTSUCCESS and try Unquiesce DB, create UNQUIESCESUCCESS
+      # Else Unquiesce DB and create SNAPSHOTFAIL
+      if [ "$mode" == "quiesce" ]
+      then
+        ver=$(mysql -u $MYSQLUSER -p$MYSQLPASSWORD -e "select version()")
+        rc=$?
+        log "PRESCRIPT - INFO - MySQL version is $ver "
+        if [ $rc -ne 0 ]
+        then
+          log "PRESCRIPT - ERROR - Unable to get version info, please check credentials, exiting"
+          touch $QUIESCEFAIL
+          exit 1
+        fi
+        #running mysql command, this creates QUIESCESUCCESS, waits for 30 seconds for snapshot
+        mysql -u $MYSQLUSER -p$MYSQLPASSWORD -e "flush tables with read lock; system touch $QUIESCESUCCESS;select sleep($TIMEOUT); system touch $QUIESCETIMEDOUT;"&
+        pid=$!
+        #Poll till TIMEOUT for SNAPSHOTSUCCESS and try Unquiesce DB, create UNQUIESCESUCCESS
+        #Else Unquiesce DB and create SNAPSHOTFAIL
+        count=$((TIMEOUT/5))
+        while [ $count -gt 0 ]
+        do
+          ls $SNAPSHOTSUCCESS 2>/dev/null
+          rcss=$?
+          if [ $rcss -eq 0 ]
+          then
+            log "PRESCRIPT - SUCCESS - Found $SNAPSHOTSUCCESS file, exiting file check"
+            kill $pid
+            break
+          fi
+          sleep 5
+          log "PRESCRIPT - WAIT - Waiting for $SNAPSHOTSUCCESS file $count, sleeping 5 seconds."
+          ((count-=1))
+        done
+        if [ $count -eq 0 ]
+        then
+          log "PRESCRIPT - ERROR - File $SNAPSHOTSUCCESS not found, unquiesce DB and exiting"
+          touch $SNAPSHOTFAIL
+          log "PRESCRIPT - INFO - Exiting $mode."
+          exit 1
+        fi
+        #UnQuiesce Database
+        mysql -u $MYSQLUSER -p$MYSQLPASSWORD -e "unlock tables"
+        rc=$?
+        if [ $rc -eq 0 ]
+        then
+          touch $UNQUIESCESUCCESS
+          log "PRESCRIPT - SUCCESS - Unquiesce of database successful."
+          log "PRESCRIPT - INFO - Exiting $mode "
+        else
+          #killing quiesce, to be on safer side
+          kill $pid
+        fi
+      fi
+    commandType: ScriptText
+  postBackupSnapshot:
+    args: []
+    command: |
+      #!/usr/bin/bash
+      ##################################################################################################
+      #post-script
+      #Check QUIESCETIMEDOUT, if present means, snapshot might not be consistent, exit
+      #Check QUIESCESUCCESS, if found create SNAPSHOTSUCCESS and wait for UNQUIESCESUCCESS, else exit
+      ##################################################################################################
+      LOGFILE="/tmp/mysql-quiesce.log"
+      SNAPSHOTSUCCESS="/tmp/db-snapshot-success"
+      QUIESCESUCCESS="/tmp/db-quiesce-success"
+      UNQUIESCESUCCESS="/tmp/db-unquiesce-success"
+      QUIESCETIMEDOUT="/tmp/db-quiesce-timedout"
+      #Log file
+      log ()
+      {
+        msg=$*
+        ts=$(date +%Y-%m-%d:%H-%M-%S)
+        echo "$ts : $msg" >> $LOGFILE
+      }
+      #If QUIESCETIMEDOUT is present it means, snapshot might not be consistent, exit
+      ls $QUIESCETIMEDOUT 2>/dev/null
+      rcqt=$?
+      if [ $rcqt -eq 0 ]
+      then
+        log "POSTSCRIPT - ERROR - Found $QUIESCETIMEDOUT"
+        log "POSTSCRIPT - ERROR - Snapshot might not be app consistent, exiting"
+        exit 1
+      fi
+      #If QUIESCESUCCESS, create SNAPSHOTSUCCESS, wait 1 min for UNQUIESCESUCCESS
+      #Exit
+      ls $QUIESCESUCCESS 2>/dev/null
+      rcqs=$?
+      if [ $rcqs != 0 ]
+      then
+        log "$QUIESCESUCCESS not found, failing."
+        exit 1
+      fi
+      if [ $rcqs -eq 0 ]
+      then
+        log "POSTSCRIPT - INFO - Found $QUIESCESUCCESS"
+        log "POSTSCRIPT - INFO - Creating $SNAPSHOTSUCCESS file"
+        #Create SNAPSHOTSUCCESS, this is needed for pre-script quiesce mode running in back ground to exit
+        touch $SNAPSHOTSUCCESS
+        count=12
+        while [ $count -gt 0 ]
+        do
+          ls $UNQUIESCESUCCESS 2>/dev/null
+          rcuqs=$?
+          if [ $rcuqs == 0 ]
+          then
+            log "POSTSCRIPT - SUCCESS - Found $UNQUIESCESUCCESS file, exiting file check"
+            break
+          fi
+          log "POSTSCRIPT - WAIT - Waiting for $UNQUIESCESUCCESS file $count, sleeping 5 seconds"
+          sleep 5
+          ((count-=1))
+        done
+        if [ $count -eq 0 ]
+        then
+          log "POSTSCRIPT - ERROR - File $UNQUIESCESUCCESS not found, exiting"
+          exit 1
+        fi
+      fi
+      log "POSTSCRIPT script completed without problems"
+      exit 0
+    commandType: ScriptText
+---
+apiVersion: k8s.cv.io/v1
+kind: CvTaskSet
+metadata:
+  name: example001-mysql
+  namespace: cv-config
+spec:
+  appName: wordpress-mysql
+  appNamespace: mano-apps
+  tasks:
+  - cvTaskName: example001-mysql-shell-script-text.yaml
+    cvTaskNamespace: cv-config
+    executionOrder: 1
+    id: custom-testcase-123
+    isDisabled: false
