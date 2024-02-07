@@ -1,8 +1,8 @@
 # This is sample CvTask and CvTaskSet YAML showing implemention of Application Consistency for MySQL
 #
 # This example copies text in preBackupSnapshot.command to file /tmp/prehook and text postBackupSnapshot.command to /tmp/posthook
-# /tmp/prehook is executed in container app-server in pod custom-app in namespace prod-db before snapshot is taken and return value saved in /tmp/pre.rc
-# /tmp/posthook is executed in container app-server in pod custom-app in namespace prod-db after snapshot is taken and return value saved in /tmp/post.rc
+# /tmp/prehook is executed in application mysql-db in namespace prod-db before snapshot is taken and return value saved in /tmp/pre.rc
+# /tmp/posthook is executed in application mysql-db in namespace prod-db after snapshot is taken and return value saved in /tmp/post.rc
 # Logging can be seen in /tmp/mysql-quiesce.log inside application
 #
 apiVersion: k8s.cv.io/v1
@@ -230,8 +230,8 @@ metadata:
   name: example001-mysql
   namespace: cv-config
 spec:
-  appName: wordpress-mysql
-  appNamespace: mano-apps
+  appName: mysql-db
+  appNamespace: prod-db
   tasks:
   - cvTaskName: example001-mysql-shell-script-text.yaml
     cvTaskNamespace: cv-config

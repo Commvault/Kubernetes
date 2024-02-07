@@ -1,9 +1,9 @@
 # This is sample CvTask and CvTaskSet YAML showing implemention of Application Consistency for MySQL
 #
 # This example copies text in preBackupSnapshot.command to file /tmp/prehook and text postBackupSnapshot.command to /tmp/posthook
-# /tmp/prehook is executed in container app-server in pod custom-app in namespace prod-db before snapshot is taken and return value saved in /tmp/pre.rc
-# /tmp/posthook is executed in container app-server in pod custom-app in namespace prod-db after snapshot is taken and return value saved in /tmp/post.rc
-# Respective logging can be seen in  /scripts/pre-freeze.log and /scripts/post-thaw.log inside application
+# /tmp/prehook is executed in application mysql-db in namespace prod-db before snapshot is taken and return value saved in /tmp/pre.rc
+# /tmp/posthook is executed in application mysql-db in namespace prod-db after snapshot is taken and return value saved in /tmp/post.rc
+# Logging can be seen in /tmp/mysql-quiesce.log inside application
 #
 apiVersion: k8s.cv.io/v1
 kind: CvTask
@@ -14,83 +14,166 @@ spec:
   preBackupSnapshot:
     args: []
     command: |
-      #!/usr/local/bin/python
-      import MySQLdb
+      #!/usr/bin/env python
+      import pymysql.cursors
       import os
+      import subprocess
       import time
-      import datetime
-      dt=datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
-      file1 = open("/scripts/pre-freeze.log","a+" )
-      try:
-        conn = MySQLdb.connect ('localhost' , 'root' , 'password' )
-        cur = conn.cursor()
-        cur.execute ("select version()")
-        data = cur.fetchone()
-        file1.write (dt)
-        file1.write ("-------------------------------------------\n")
-        file1.write ("-------------------------------------------\n")
-        file1.write ("\t MySQL version is %s: "%data)
-        file1.write ("-------------------------------------------\n")
-        file1.write ("-------------------------------------------\n")
-      except:
-        file1.write (dt)
-        file1.write("\t unable to connect to MySQL server\n")
-        file2 = open ('/tmp/freeze_snap.lock', 'w')
-        file2.close()
-      try:
-        cur.execute (" flush tables with read lock ")
-        file1.write (dt)
-        file1.write ("\t using quiesce.py script - quiesce of database successful \n")
-      except:
-       file1.write(dt)
-        file1.write( "\n unexpected error from MySQL, unable to do flush tables with read lock, Please check MySQL error logs for more info\n")
-        while True:
-          check = os.path.exists ("/tmp/freeze_snap.lock")
-          if check == True:
-            continue
-          else:
+      import sys
+      import logging
+      
+      QUIESCESUCCESS = '/tmp/db-quiesce-success'
+      QUIESCEFAIL = '/tmp/db-quiesce-fail'
+      SNAPSHOTSUCCESS = '/tmp/db-snapshot-success'
+      SNAPSHOTFAIL = '/tmp/db-snapshot-fail'
+      UNQUIESCESUCCESS = '/tmp/db-unquiesce-success'
+      LOGFILE = '/tmp/mysql-quiesce.log'
+      
+      #Log file
+      logging.basicConfig(filename=LOGFILE,format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
+      logging.info('PRESCRIPT - INFO - Start')
+      
+      #2 modes, 'launch' and 'quiesce'
+      #default mode is 'launch'
+      if ( len(sys.argv) > 1):
+        mode = sys.argv[1]
+      else:
+        mode = 'launch'
+      logging.info ('PRESCRIPT - MODE : %s' %mode)
+      
+      #Delete old/stale files
+      if ( mode == 'launch' ):
+        if ( os.path.isfile(QUIESCESUCCESS)):
+          os.remove(QUIESCESUCCESS)
+        if ( os.path.isfile(QUIESCEFAIL)):
+          os.remove(QUIESCEFAIL)
+        if ( os.path.isfile(SNAPSHOTSUCCESS)):
+          os.remove(SNAPSHOTSUCCESS)
+        if ( os.path.isfile(UNQUIESCESUCCESS)):
+          os.remove(UNQUIESCESUCCESS)
+        if ( os.path.isfile(SNAPSHOTFAIL)):
+          os.remove(SNAPSHOTFAIL)
+      
+      # Quiesce mode
+      # Quiesce DB, create QUIESCESUCCESS or QUIESCEFAIL
+      # Poll for 30 seconds for SNAPSHOTSUCCESS and try Unquiesce DB, create UNQUIESCESUCCESS
+      # Else Unquiesce DB and create SNAPSHOTFAIL
+      if ( mode == 'quiesce' ):
+        try:
+          conn = pymysql.connect (host='localhost' , user='root' , password='Changeme1@',
+            charset='utf8mb4',
+            cursorclass=pymysql.cursors.DictCursor )
+          cur = conn.cursor()
+          cur.execute ('select version()')
+          data = cur.fetchone()
+          logging.debug ('PRESCRIPT - INFO - MySQL version is %s: ' %(data) )
+        except pymysql.Error as e:
+          logging.debug('\nPRESCRIPT - ERROR - Unable to connect to MySQL server, check connectivity, creds, host\n')
+          logging.debug('\nPRESCRIPT - EXCEPTION %d: %s' %(e.args[0], e.args[1]))
+          open(QUIESCEFAIL,'w').close()
+          logging.debug('PRESCRIPT - INFO - Exiting %s' %(mode))
+          sys.exit(1)
+        try:
+          cur = conn.cursor()
+          cur.execute (' flush tables with read lock ')
+          logging.debug ('PRESCRIPT - SUCCESS - Quiesce of database successful.')
+          open(QUIESCESUCCESS,'w' ).close()
+      
+          #Poll for 30 seconds for SNAPSHOTSUCCESS and try Unquiesce DB, create UNQUIESCESUCCESS
+          #Else Unquiesce DB and create SNAPSHOTFAIL
+          count = 6
+          while ( count ):
+            if ( True == os.path.isfile(SNAPSHOTSUCCESS) ):
+              logging.debug('PRESCRIPT - SUCCESS - Found %s file, exiting file check' %(SNAPSHOTSUCCESS))
+              break
+            time.sleep(5)
+            logging.debug('PRESCRIPT - WAIT - Waiting for %s file, sleeping 5 seconds' %(SNAPSHOTSUCCESS))
+            count = count - 1
+          if ( count == 0):
+            logging.debug('PRESCRIPT - ERROR - File %s not found, unquiesce DB and exiting' %(SNAPSHOTSUCCESS))
+            open(SNAPSHOTFAIL,'w' ).close()
+            cur.execute ('unlock tables')
+            logging.debug ('PRESCRIPT - INFO - Exiting %s\n' %(mode))
+            sys.exit(1)
+          cur.execute ('unlock tables')
+          open(UNQUIESCESUCCESS,'w' ).close()
+          logging.debug ('PRESCRIPT - SUCCESS - Unquiesce of database successful.')
+          logging.debug ('PRESCRIPT - INFO - Exiting %s\n' %(mode))
+        except Exception as e:
+          logging.debug( 'EXCEPTION :%s' %(e))
+          cur.execute ('unlock tables')
+          logging.debug( 'PRESCRIPT - ERROR - Unexpected error, perform steps manually to check further\n')
+        finally:
+          cur.close()
+          conn.close()
+      #Launch mode
+      #Call pre script in quiesce mode in back ground and wait for QUIESCESUCCESS/QUIESCEFAIL
+      #exit
+      elif( mode == 'launch' ):
+        logging.debug ('PRESCRIPT - INFO - Calling pre-script in quiesce mode')
+        command = ['python','/tmp/prehook','quiesce']
+        subprocess.Popen(command)
+        count = 12
+        while ( count ):
+          if ( True == os.path.isfile(QUIESCESUCCESS) ):
+            logging.debug('PRESCRIPT - SUCCESS - Found  %s file, exiting file check' %(QUIESCESUCCESS))
             break
+          elif ( True == os.path.isfile(QUIESCEFAIL) ):
+            logging.debug('PRESCRIPT - SUCCESS - Found  %s file, exiting' %(QUIESCEFAIL))
+            sys.exit(1)
+          time.sleep(5)
+          logging.debug('PRESCRIPT - WAIT - Waiting for %s file, sleeping 5 seconds' %(QUIESCESUCCESS))
+          count = count - 1
+        #Failed to find QUIESCESUCCESS in 1 min
+        if ( count == 0 ):
+          logging.debug('PRESCRIPT - ERROR - File %s not found, exiting' %(QUIESCESUCCESS))
+          logging.debug ('PRESCRIPT - INFO - Exiting %s\n' %(mode))
+          sys.exit(1)
+        else:
+          logging.debug ('PRESCRIPT - INFO - Exiting %s\n' %(mode))
+          sys.exit(0)
     commandType: ScriptText
   postBackupSnapshot:
     args: []
     command: |
-      #!/usr/local/bin/python
-      import MySQLdb
+      #!/usr/bin/env python
       import os
       import time
-      import datetime
-      dt=datetime.datetime.now().strftime("%I:%M%p on %B %d, %Y")
-      file1 = open("/scripts/post-thaw.log","a+" )
-      try:
-        os.remove('/tmp/freeze_snap.lock')
-        time.sleep(2)
-      except Exception, e:
-        print e
-      try:
-        conn = MySQLdb.connect ('localhost' , 'root' , 'password' )
-        cur = conn.cursor()
-        cur.execute ("select version()")
-        data = cur.fetchone()
-        file1.write (dt)
-        file1.write ("-------------------------------------------\n")
-        file1.write ("-------------------------------------------\n")
-        file1.write ("\t MySQL version is %s: "%data)
-        file1.write ("-------------------------------------------\n")
-        file1.write ("-------------------------------------------\n")
-      except:
-        file1.write (dt)
-        file1.write("\t unable to connect to MySQL server\n")
-      try:
-        file1.write (dt)
-        file1.write ("\t executing query to unquiesce the database \n")
-        cur.execute ("unlock tables")
-        file1.write (dt)
-        file1.write ("\t Database is in unquiesce mode now \n")
-      except:
-        file1.write(dt)
-        file1.write( "\n unexpected error from MySQL, unable to unlock tables. Please check MySql error logs for more info \n")
-        cur.close()
-        conn.close()
+      import sys
+      import logging
+      
+      LOGFILE = '/tmp/mysql-quiesce.log'
+      SNAPSHOTSUCCESS = '/tmp/db-snapshot-success'
+      QUIESCESUCCESS = '/tmp/db-quiesce-success'
+      UNQUIESCESUCCESS = '/tmp/db-unquiesce-success'
+      QUIESCEFAIL = 'tmp/db-quiesce-fail'
+      
+      logging.basicConfig(filename=LOGFILE,format='%(asctime)s %(message)s', datefmt='%m/%d/%Y %I:%M:%S %p', level=logging.DEBUG)
+      logging.debug('POSTSCRIPT - INFO - Start')
+      
+      #If QUIESCESUCCESS, create SNAPSHOTSUCCESS, wait 1 min for UNQUIESCESUCCESS else create QUIESCEFAIL
+      #Exit
+      if ( True == os.path.isfile(QUIESCESUCCESS) ):
+        logging.debug('POSTSCRIPT - INFO - Creating %s file' %SNAPSHOTSUCCESS)
+        open(SNAPSHOTSUCCESS,'w' ).close()
+      
+        count = 12
+        while ( count ):
+          if ( True == os.path.isfile(UNQUIESCESUCCESS) ):
+            logging.debug('POSTSCRIPT - SUCCESS - Found  %s file, exiting file check' %UNQUIESCESUCCESS)
+            break
+          time.sleep(5)
+          logging.info('POSTSCRIPT - WAIT - Waiting for %s file, sleeping 5 seconds' %UNQUIESCESUCCESS)
+          count = count - 1
+      
+        if ( count == 0):
+          logging.debug('POSTSCRIPT - ERROR - File %s not found, exiting' %(UNQUIESCESUCCESS))
+          logging.debug('=====================================================\n')
+          sys.exit(1)
+      elif ( True == os.path.isfile(QUIESCEFAIL) ):
+        logging.debug('POSTSCRIPT - FAIL - Quiesce failed, exiting')
+        logging.debug('=====================================================\n')
+        sys.exit(1)
     commandType: ScriptText
 ---
 apiVersion: k8s.cv.io/v1
@@ -100,7 +183,7 @@ metadata:
   namespace: cv-config
 spec:
   appName: mysql-db
-  appNamespace: database
+  appNamespace: prod-db
   tasks:
   - cvTaskName: example001-mysql-python-script-text.yaml
     cvTaskNamespace: cv-config
