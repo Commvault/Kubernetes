@@ -14,7 +14,7 @@ spec:
   preBackupSnapshot:
     args: []
     command: |
-      #!/usr/bin/bash
+      #!/bin/bash
       ##################################################################################################
       #pre-script has 2 modes, launch and quiesce
       #launch mode:
@@ -34,7 +34,7 @@ spec:
       LOGFILE="/tmp/mysql-quiesce.log"
       #Database credentials
       MYSQLUSER="root"
-      MYSQLPASSWORD="changeme"
+      MYSQLPASSWORD="jeWxzg0rpx"
       TIMEOUT=60
       #Log file
       log ()
@@ -43,7 +43,6 @@ spec:
         ts=$(date +%Y-%m-%d:%H-%M-%S)
         echo "$ts : $msg" >> $LOGFILE
       }
-      
       #2 modes, "launch" and "quiesce"
       #default mode is "launch"
       if [ "$#" -gt 0 ]
@@ -158,7 +157,7 @@ spec:
   postBackupSnapshot:
     args: []
     command: |
-      #!/usr/bin/bash
+      #!/bin/bash
       ##################################################################################################
       #post-script
       #Check QUIESCETIMEDOUT, if present means, snapshot might not be consistent, exit
@@ -230,8 +229,8 @@ metadata:
   name: example001-mysql
   namespace: cv-config
 spec:
-  appName: mysql-db
-  appNamespace: prod-db
+  appName: my-release
+  appNamespace: galeramariadb
   tasks:
   - cvTaskName: example001-mysql-shell-script-text.yaml
     cvTaskNamespace: cv-config
