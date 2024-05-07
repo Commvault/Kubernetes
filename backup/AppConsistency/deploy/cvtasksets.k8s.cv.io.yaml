@@ -70,6 +70,9 @@ spec:
                       - Namespace
                       - Cluster
                       default: Application
+                    #optional task base directory to be used as staging directory for copying scripts and few other tasks. 
+                    taskDirectory: 
+                      type: string
                     #optional execution sequence field: helpful in case where there are multiple tasks selected and we want them to be executed in sequence.
                     executionOrder:
                       type: integer
