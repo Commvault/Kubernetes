@@ -38,7 +38,7 @@ spec:
                       - Modify
                       type: string
                     newValue:
-                      type: string
+                      x-kubernetes-preserve-unknown-fields: true
                     parameters:
                       enum:
                       - Exact
@@ -53,6 +53,7 @@ spec:
                       x-kubernetes-preserve-unknown-fields: true
                   required:
                   - selectorId
+                  - action
                   type: object
                 type: array
               selectors:
@@ -68,11 +69,15 @@ spec:
                           default: Contains
                         exact:
                           type: boolean
+                          default: true
                         path:
                           type: string
                         value:
-                          type: string
+                          x-kubernetes-preserve-unknown-fields: true
                       type: object
+                      required:
+                      - path
+                      - value
                     id:
                       type: string
                     kind:
