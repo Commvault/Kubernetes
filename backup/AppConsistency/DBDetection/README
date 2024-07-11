@@ -1,5 +1,6 @@
 The script CVK8SDiscoverDB.sh can be used to auto-detect the presence of mysql and postgresql databases inside the pods running on the kubernetes cluster.
-The script will create the CVTask and CVTaskSet custom resource yamls that can be used for application consistent backups.
+It will create the CVTask and CVTaskSet custom resource yamls that can be used for application consistent backups.
+Note that galera maria DB application is quiesced in the same way as MySQL. So the same yamls will be created for mysql and galera-mariaDB applications.
 
 Syntax:
 
@@ -7,4 +8,4 @@ CVK8SDiscoverDB.sh --namespace <namespace name> --db <database name>
 
 Example
 
-CVK8SDiscoverDB.sh --namespace all --db mysql,postgres
+CVK8SDiscoverDB.sh --namespace all --db mysql,postgres,keydb,mariadb
