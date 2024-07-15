@@ -15,46 +15,138 @@ spec:
   preBackupSnapshot:
     commandType: ScriptText
     command: |
-      #!/bin/bash
-      MYSQL_USER="root"
-      MYSQL_PASSWORD="cvadmin"
-      logfile="/tmp/app-consistency.log"
-      echo `date +"%Y-%m-%d %H:%M:%S"` "Starting prescript execution..." >> $logfile
-      result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "SHOW SLAVE STATUS\G")
-      if [[ $result == *"Slave_IO_Running: Yes"* ]]; then
-         echo `date +"%Y-%m-%d %H:%M:%S"` "This is a slave mysql pod...will not quiesce it" >> $logfile
-      else
-         echo `date +"%Y-%m-%d %H:%M:%S"` "This is master or stanalone mysql pod...quiescing it" >> $logfile
-         result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "FLUSH TABLES WITH READ LOCK;")
-         if [[ $result == *"ERROR"* ]]; then
-            echo `date +"%Y-%m-%d %H:%M:%S"` "Error ! Unable to quiesce the mysql database" >> $logfile
-            echo `date +"%Y-%m-%d %H:%M:%S"` "Exiting" >> $logfile
-            exit 1
-         else
-            echo `date +"%Y-%m-%d %H:%M:%S"` "mysql database quiesced succesfully" >> $logfile
-            exit 0
-         fi
-      fi
+     #!/bin/bash
+     QUIESCESUCCESS="/tmp/db-quiesce-success"
+     QUIESCEFAIL="/tmp/db-quiesce-fail"
+     SNAPSHOTSUCCESS="/tmp/db-snapshot-success"
+     SNAPSHOTFAIL="/tmp/db-snapshot-fail"
+     UNQUIESCESUCCESS="/tmp/db-unquiesce-success"
+     QUIESCETIMEDOUT="/tmp/quiescetimedout"
+     LOGFILE="/tmp/mysql-quiesce.log"
+     #Database credentials
+     MYSQLUSER='mysql_username'
+     MYSQLPASSWORD='mysql_password'
+     TIMEOUT=120
+     #Log file
+     log ()
+     {
+        msg=$*
+        ts=$(date +%Y-%m-%d:%H-%M-%S)
+        echo "$ts : $msg" >> $LOGFILE
+     }
+     #2 modes, "launch" and "quiesce"
+     #default mode is "launch"
+     if [ "$#" -gt 0 ]
+     then
+     mode=$1
+     else
+     mode="launch"
+     fi
+     log "PRESCRIPT - INFO - Starting $mode \n"
+     #Delete old/stale files
+     #Call pre script in quiesce mode in back ground and wait for QUIESCESUCCESS/QUIESCEFAIL
+     #exit
+     if [ "$mode" == "launch" ]
+     then
+     rm -f $QUIESCESUCCESS
+     rm -f $QUIESCEFAIL
+     rm -f $SNAPSHOTSUCCESS
+     rm -f $SNAPSHOTFAIL
+     rm -f $UNQUIESCESUCCESS
+     rm -f $QUIESCETIMEDOUT
+     log "PRESCRIPT - INFO - Calling pre-script in quiesce mode"
+     /tmp/prehook quiesce &
+     pid=$!
+     rc=$?
+     count=12
+     while [ $count -gt 0 ];
+     do
+     ls $QUIESCESUCCESS 2>/dev/null
+     rcqs=$?
+     ls $QUIESCEFAIL 2>/dev/null
+     rcqf=$?
+     if [ $rcqs == 0 ]
+     then
+     log "PRESCRIPT - SUCCESS - Found $QUIESCESUCCESS file, exiting file check"
+     break
+     elif [ $rcqf == 0 ]
+     then
+     log "PRESCRIPT - SUCCESS - Found  $QUIESCEFAIL file, exiting"
+     exit 1
+     fi
+     sleep 5
+     ((count-=1))
+     done
+     #Failed to find QUIESCESUCCESS in 1 min
+     if [ $count == 0 ]
+     then
+     log "PRESCRIPT - ERROR - File $QUIESCESUCCESS not found, exiting"
+     log "PRESCRIPT - INFO - Exiting $mode."
+     exit 1
+     else
+     log "PRESCRIPT - INFO - Exiting $mode."
+     exit 0
+     fi
+     fi
+     # Quiesce mode
+     # Quiesce DB, create QUIESCESUCCESS or QUIESCEFAIL
+     # Poll for 30 seconds for SNAPSHOTSUCCESS and try Unquiesce DB, create UNQUIESCESUCCESS
+     # Else Unquiesce DB and create SNAPSHOTFAIL
+     if [ "$mode" == "quiesce" ]
+     then
+     ver=$(mysql -u $MYSQLUSER -p$MYSQLPASSWORD -e "select version()")
+     rc=$?
+     log "PRESCRIPT - INFO - MySQL version is $ver "
+     if [ $rc -ne 0 ]
+     then
+     log "PRESCRIPT - INFO - Unable to get version info, please check credentials, exiting"
+     touch $QUIESCEFAIL
+     exit 1
+     fi
+     #running mysql command, this creates QUIESCESUCCESS, waits for 30 seconds for snapshot
+     mysql -u $MYSQLUSER -p$MYSQLPASSWORD -e "flush tables with read lock; system touch $QUIESCESUCCESS;select sleep($TIMEOUT)" 
+     rc=$?
+     pid=$!
+     touch $QUIESCETIMEDOUT
+     if [ $rc -ne 0 ]
+     then
+     log "PRESCRIPT - INFO - DB Quiesce failed"
+     touch $QUIESCEFAIL
+     exit 1
+     fi
+     #UnQuiesce Database.
+     mysql -u $MYSQLUSER -p$MYSQLPASSWORD -e "unlock tables"
+     rc=$?
+     if [ $rc -eq 0 ]
+     then
+     touch $UNQUIESCESUCCESS
+     log "PRESCRIPT - SUCCESS - Unquiesce of database successful."
+     log "PRESCRIPT - INFO - Exiting $mode \n"
+     else
+     #killing quiesce, to be on safer side
+     kill $pid
+     fi
+     fi
   postBackupSnapshot:
     commandType: ScriptText
     command: |
-      #!/bin/bash
-      MYSQL_USER=mysql_username
-      MYSQL_PASSWORD=mysql_password
-      logfile="/tmp/app-consistency.log"
-      echo `date +"%Y-%m-%d %H:%M:%S"` "Starting postscript execution..." >> $logfile
-      result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "SHOW SLAVE STATUS\G")
-      if [[ $result == *"Slave_IO_Running: Yes"* ]]; then
-        echo `date +"%Y-%m-%d %H:%M:%S"` "This is a slave mysql pod...will not unquiesce it as it was not quiesced" >> $logfile
-      else
-        echo "This mysql container is a master or standalone. uquiescing it.." >> $logfile
-        result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "unlock tables;")
-        if [[ $result == *"ERROR"* ]]; then
-          echo `date +"%Y-%m-%d %H:%M:%S"` "Error ! Unable to unquiesce the mysql database" >> $logfile
-          echo `date +"%Y-%m-%d %H:%M:%S"` "Please unquiesce it manually by running 'unlock tables'" >> $logfile
-          exit 1
-        else
-          echo `date +"%Y-%m-%d %H:%M:%S"` "mysql database unquiesced sucessfully." >> $logfile
-          exit 0
-        fi
-      fi
+     #!/bin/bash
+     MYSQL_USER=mysql_username
+     MYSQL_PASSWORD=mysql_password
+     logfile="/tmp/app-consistency.log"
+     echo `date +"%Y-%m-%d %H:%M:%S"` "Starting postscript execution..." >> $logfile
+     result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "SHOW SLAVE STATUS\G")
+     if [[ $result == *"Slave_IO_Running: Yes"* ]]; then
+     echo `date +"%Y-%m-%d %H:%M:%S"` "This is a slave mysql pod...will not unquiesce it as it was not quiesced" >> $logfile
+     else
+     echo "This mysql container is a master or standalone. uquiescing it.." >> $logfile
+     result=$(mysql -u "$MYSQL_USER" -p"$MYSQL_PASSWORD" -e "unlock tables;")
+     if [[ $result == *"ERROR"* ]]; then
+     echo `date +"%Y-%m-%d %H:%M:%S"` "Error ! Unable to unquiesce the mysql database" >> $logfile
+     echo `date +"%Y-%m-%d %H:%M:%S"` "Please unquiesce it manually by running 'unlock tables'" >> $logfile
+     exit 1
+     else
+     echo `date +"%Y-%m-%d %H:%M:%S"` "mysql database unquiesced sucessfully." >> $logfile
+     exit 0
+     fi
+     fi

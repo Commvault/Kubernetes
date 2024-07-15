@@ -1,0 +1,36 @@
+#
+# This is sample CvTask and CvTaskSet YAML, which shows how to use commandType:ScriptText
+#
+# This copies text in preBackupSnapshot.command to file /tmp/prehook and text postBackupSnapshot.command to /tmp/posthook
+# /tmp/prehook is executed in container app-server in pod custom-app in namespace prod-db before snapshot is taken and return value saved in /tmp/pre.rc
+# /tmp/posthook is executed in container app-server in pod custom-app in namespace prod-db after snapshot is taken and return value saved in /tmp/post.rc
+# Return values of executed scripts will be placed at /tmp/pre.rc and /tmp/post.rc
+#
+apiVersion: k8s.cv.io/v1
+kind: CvTask
+metadata:
+  name: cvtaskname_placeholder
+  namespace: cv-config
+spec:
+  preBackupSnapshot:
+    commandType: ScriptText
+    command: |
+      #!/bin/bash
+      logfile="/tmp/app-consistency.log"
+      echo `date +"%Y-%m-%d %H:%M:%S"` "Starting prescript execution..." >> $logfile
+      result=$(keydb-cli save -a keydb_password)
+      if [[ $result == *"OK"* ]]; then
+         echo `date +"%Y-%m-%d %H:%M:%S"` "KeyDB dump created" >> $logfile
+         exit 0
+      else
+         echo `date +"%Y-%m-%d %H:%M:%S"` "Error ! Unable to dump the keydb..." >> $logfile
+         exit 1
+      fi
+  postBackupSnapshot:
+    commandType: ScriptText
+    command: |
+      #!/bin/bash
+      logfile="/tmp/app-consistency.log"
+      echo `date +"%Y-%m-%d %H:%M:%S"` "Starting postscript execution..." >> $logfile
+      echo `date +"%Y-%m-%d %H:%M:%S"` "Nothing to be done for keydb.." >> $logfile
+      exit 0
