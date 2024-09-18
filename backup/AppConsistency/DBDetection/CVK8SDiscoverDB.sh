@@ -92,7 +92,7 @@ parse_cli_params() {
  				  mariadb=1
 				  shift
 				  ;;
-				postgresql)
+				postgres)
 				  postgresql=1
 				  shift
 				  ;;
@@ -121,7 +121,7 @@ display_usage() {
       echo -e "\n Syntax:"
       echo "  CVK8SDiscoverDB.sh --help						Display this help"
       echo "  CVK8SDiscoverDB.sh --namespace <namespace> --db <db name>		Provide comma separater namespaces and db names. Specify 'all' to discover all databases in all namespaces."    
-      echo "  Supported databases : mysql, postgresql, keydb, mariadb "
+      echo "  Supported databases : mysql, postgres, keydb, mariadb "
       echo ""
       exit 1
 }
@@ -255,7 +255,7 @@ fetch_credentials_from_secret() {
 								mysql_username=$username
 								mysql_password=$password
 								;;
-							"postgresql")
+							"postgres")
 								postgres_username=$username
 								postgres_password=$password
 							;;	
