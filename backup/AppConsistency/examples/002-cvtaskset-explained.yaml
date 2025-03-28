@@ -13,6 +13,7 @@ metadata:
 spec:
   
   #Name of application on which the tasks should be run.
+  #When referencing an application deployed as a Deployment, please provide the Deployment's name, not the name of an individual pod
   appName: my-app
   
   #Namespace of the application on which the tasks should be run.
