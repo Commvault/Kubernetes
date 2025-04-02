@@ -17,6 +17,7 @@ spec:
     command: |
       #!/bin/bash
       logfile="/tmp/app-consistency.log"
+      export PGPASSWORD="postgres_password_placeholder"
       echo `date +"%Y-%m-%d %H:%M:%S"` "Started pre-script execution" >> $logfile
       result=$(psql -U postgres_username_placeholder -d postgres_db_name_placeholder -c 'ALTER DATABASE postgres_db_name_placeholder SET default_transaction_read_only = on;')
       result=$(psql -U postgres_username_placeholder -d postgres_db_name_placeholder -c "SELECT current_setting('default_transaction_read_only');")
@@ -32,6 +33,7 @@ spec:
     command: |
       #!/bin/bash
       logfile='/tmp/app-consistency.log'
+      export PGPASSWORD="postgres_password_placeholder"
       echo `date +"%Y-%m-%d %H:%M:%S"` "Started post-script execution" >> $logfile
       result=$(psql -U postgres_username_placeholder -d postgres_db_name_placeholder -c 'BEGIN; SET TRANSACTION READ WRITE; ALTER DATABASE postgres_db_name_placeholder SET default_transaction_read_only = off; COMMIT;')
       result=$(psql -U postgres_username_placeholder -d postgres_db_name_placeholder -c "SELECT current_setting('default_transaction_read_only');")

@@ -38,7 +38,7 @@ keydb=0
 db_all=0
 mariadb=0
 
-logfile="/tmp/discovery.log"
+logfile="/tmp/CVK8SDicoveryDB.log"
 found=0
 
 #--------------------------------------------------------
@@ -458,17 +458,21 @@ create_cvtask() {
 	cvtask_filename=""
 	cvtaskset_filename=""
 	instance_name=""
+        name2=""
+        helm_app=0
 	
-	# If the pod is a helm-based deployment, check the "app.kubernetes.io/instance=galeradb" and use that for the name of the CVTask.
+	# If the pod is a helm-based deployment, check the "app.kubernetes.io/instance=<name>" and use that for the name of the CVTask.
 	labels=$(kubectl get pod "$pod" -n "$namespace" -o jsonpath='{.metadata.labels}')
 	is_helm=$(echo "$labels" | jq -r 'to_entries | map("\(.key)=\(.value)") | .[]' | while read each; do grep -i "app.kubernetes.io/managed-by" | cut -d '=' -f2 ; done)
+        echo `date +"%Y-%m-%d %H:%M:%S"` "Pod : $pod is managed by Helm" >> $logfile
 	if [[ -n $is_helm && $is_helm == "Helm" ]]; then
 		echo "[$pod_name] - is a helm chart object"
 		helm_app=1
 		instance_name=$(echo "$labels" | jq -r 'to_entries | map("\(.key)=\(.value)") | .[]' | grep -i "app.kubernetes.io/name" | cut -d '=' -f2 )
-		echo $instance_name
-		if [ -z $instance_name ]; then
-			echo "No label "app.kubernetes.io/instance" found for this Helm object. Please add it and rerun"
+		name2=$(echo "$labels" | jq -r 'to_entries | map("\(.key)=\(.value)") | .[]' | grep -i "app.kubernetes.io/instance" | cut -d '=' -f2 )
+		if [[ -z $instance_name || -z $name2 ]]; then
+			echo "No label "app.kubernetes.io/instance" or "app.kubernetes.io/name"  found for this Helm object. Please add it and rerun"
+			echo "No label "app.kubernetes.io/instance" or "app.kubernetes.io/name" found for this Helm object. Please add it and rerun" >> $logfile
 			exit 1
 		fi
 	fi
@@ -578,14 +582,23 @@ create_cvtask() {
 					pod_name=$instance_name
 				fi 
 
-				sed -i "s/"cvtaskname_placeholder"/"cvtask"-$pod_namespace"-"$pod_name"/g "$cvtask_filename"
+				#sed -i "s/"cvtaskname_placeholder"/"cvtask"-$pod_namespace"-"$pod_name"/g "$cvtask_filename"
 				sed -i "s/"postgres_username_placeholder"/$postgres_username/g" "$cvtask_filename"
+				sed -i "s/"postgres_password_placeholder"/$postgres_password/g" "$cvtask_filename"
 				sed -i "s/"postgres_db_name_placeholder"/$postgres_db_name/g" "$cvtask_filename"
 
-				sed -i "s/"cvtaskname_placeholder"/"cvtask"-$pod_namespace"-"$pod_name"/g "$cvtaskset_filename"
-				sed -i "s/"cvtasksetname_placeholder"/"cvtaskset"-$pod_namespace"-"$pod_name"/g "$cvtaskset_filename"
-
-				sed -i "s/"my-pod_placeholder"/$app_name/g" "$cvtaskset_filename"
+				if [ $helm_app == 1 ]; then
+					sed -i "s/"cvtaskname_placeholder"/"cvtask"-$pod_namespace"-"$name2"/g "$cvtask_filename"
+					sed -i "s/"cvtaskname_placeholder"/"cvtask"-$pod_namespace"-"$name2"/g "$cvtaskset_filename"
+					sed -i "s/"cvtasksetname_placeholder"/"cvtaskset"-$pod_namespace"-"$name2"/g "$cvtaskset_filename"
+					sed -i "s/"my-pod_placeholder"/$name2/g" "$cvtaskset_filename"
+				else
+					sed -i "s/"cvtaskname_placeholder"/"cvtask"-$pod_namespace"-"$pod_name"/g "$cvtask_filename"
+					sed -i "s/"cvtaskname_placeholder"/"cvtask"-$pod_namespace"-"$pod_name"/g "$cvtaskset_filename"
+					sed -i "s/"cvtaskname_placeholder"/"cvtask"-$pod_namespace"-"$pod_name"/g "$cvtaskset_filename"
+					sed -i "s/"cvtasksetname_placeholder"/"cvtaskset"-$pod_namespace"-"$pod_name"/g "$cvtaskset_filename"
+					sed -i "s/"my-pod_placeholder"/$app_name/g" "$cvtaskset_filename"
+				fi
 				sed -i "s/"prepost_placeholder"/$pod_namespace/g" "$cvtaskset_filename"
 				
 			else
